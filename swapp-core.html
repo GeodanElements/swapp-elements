@@ -1,0 +1,207 @@
+<link rel="import" href="../polymer/polymer.html">
+<link rel="import" href="../iron-ajax/iron-ajax.html">
+
+<dom-module id="swapp-core">
+
+<template>
+	<iron-ajax id="loginRequest"
+		url="http://localhost/swapp_server/api/Login"
+		body='{"password": "", "username": ""}'
+		method="post"
+		content-Type="application/json"
+		verbose="true"
+		with-credentials="false"
+		response-type="json"
+		on-error="loginerror"
+		last-error="{{lastloginerror}}"
+		last-response="{{account}}"></iron-ajax>
+	<iron-ajax id="incidentsRequest"
+		url="http://localhost/swapp_server/api/incidentlist"
+		content-Type="application/json"
+		verbose="true"
+		with-credentials="true"
+		response-type="json"
+		last-response="{{incidentlist}}"></iron-ajax>
+	<iron-ajax id="incidentDataRequest"
+		url="{{incidenDataUrl}}"
+		content-Type="application/json"
+		verbose="true"
+		with-credentials="true"
+		response-type="json"
+		last-response="{{incidentdata}}"></iron-ajax>
+	<iron-ajax id="incidentTasksRequest"
+		url="{{incidenTasksUrl}}"
+		content-Type="application/json"
+		verbose="true"
+		with-credentials="true"
+		response-type="json"
+		last-response="{{incidenttasks}}"></iron-ajax>
+	<iron-ajax id="jobTitleRequest"
+		url="http://localhost/swapp_server/api/JobTitle/"
+		content-Type="application/json"
+		verbose="true"
+		with-credentials="true"
+		response-type="json"
+		last-response="{{jobtitledata}}"></iron-ajax>
+	<iron-ajax id="finishTask"
+		body='{"Status": "Completed"}'
+		content-Type="application/json"
+		method="patch"
+		verbose="true"
+		with-credentials="true"
+		response-type="json"
+		on-response="_selectedProjectChanged"
+		last-response="{{finishedtask}}"></iron-ajax>
+
+</template>
+</dom-module>
+
+<script>
+Polymer({
+    is: 'swapp-core',
+    properties: {
+		credentials: {
+			type: Object,
+			observer: 'login'
+		},
+    	account: {
+    		type: Object,
+			readonly: true,
+    		observer: '_accountChanged'
+    	},
+		incidents: {
+			type: Array,
+			notify: true
+		},
+		jobtitleid: {
+			type: Number,
+			observer: '_jobtitleChanged'
+		},
+		incidentdata: {
+			type: Object,
+		},
+		selectedproject: {
+			type: String,
+			observer: '_selectedProjectChanged'
+		}
+    },
+	observers: [
+		'_incidentlistChanged(incidentlist)'
+	],
+    ready: function(){
+    	var self = this;
+    },
+	_incidentlistChanged: function(incidentlist){
+		this.incidents = incidentlist.incidents || [];
+	},
+
+
+	login: function(creds){
+		this.$.loginRequest.body = {username: creds.username, password: creds.password};
+		this.$.loginRequest.generateRequest();
+	},
+	loginerror: function(){
+
+	},
+	_getStakeHolders: function(arr){
+		var self = this;
+		var returnarr = [];
+		if(typeof arr=='number') arr=[arr];
+		arr = arr?arr:[];
+		arr.forEach(function(d){
+			self.jobtitledata.jobTitles.forEach(function(x){
+				if (x.jobTitleId == d) returnarr.push(x.name);
+			});
+		});
+		return returnarr.join(',');
+	},
+	sortincidents: function(sortby){
+		switch (sortby){
+			case 'creationTimeDateTime':
+				return function(a,b){
+					return new Date(b[sortby]).getTime() - new Date(a[sortby]).getTime();
+				}
+				break;
+			default:
+				return null;
+		}
+	},
+	getopentasks: function(item){
+		return item.taskCountByJobTitleId[this.jobtitleid]?item.taskCountByJobTitleId[this.jobtitleid].taskCountOpen:'';
+	},
+	openclosedtasks: function(showclosedtasks){
+		return function(task){
+			if (showclosedtasks || (task.status != "Completed" && task.status != "Resolved")){
+				return true;
+			};
+			return false;
+		}
+	},
+	setDone: function(e){
+		var model = this.$.tasksrepeater.modelForElement(e.target);
+	    var task = model.item;
+		var conditionid = e.target.name;
+		if (conditionid) {
+			this.$.finishTask.params = {"conditionId": conditionid };
+			this.$.finishTask.method = 'post';
+		}
+		this.$.finishTask.url = "http://localhost/swapp_server/api/Task/" + task.taskId;
+		this.$.finishTask.headers.token = this.token;
+		this.$.finishTask.generateRequest();
+		this.$.finishTask.params = null; //reset params
+		this.$.finishTask.method = 'patch';
+	},
+	_resetProject:function(){
+		this.selectedproject = null;
+		this.incidentdata = null;
+		this.incidenttasks = null;
+	},
+	_credentialsChanged: function(creds){
+
+	},
+    _accountChanged: function(acc){
+		if (acc.user){
+			this.token = acc.token;
+			this._resetProject();
+			this.jobtitleid = acc.user.defaultJobTitleId;
+			this.jobname = acc.user.jobTitles.filter(d=>d.jobTitleId == this.jobtitleid)[0].name;
+			this.$.jobTitleRequest.headers.token = this.token;
+			this.$.jobTitleRequest.generateRequest();
+			/* TODO: move to cow
+			this.cowaccount = {
+	    		id: acc.user.userId,
+	    		name: acc.user.name
+	    	};
+			var user = this.core.users(acc.user.userId.toString());
+	    	if (!user){
+	    		user = this.core.users({_id: acc.user.userId.toString()});
+	    	}
+			user.data({name: acc.user.name}).sync()
+	    	this.core.user(acc.user.userId);
+			*/
+		}
+    },
+	_jobtitleChanged: function(id){
+		this._resetProject();
+		this.jobname = this.account.user.jobTitles.filter(d=>d.jobTitleId == id)[0].name;
+		this.$.incidentsRequest.params.jobTitleId =	this.jobtitleid;
+		this.$.incidentsRequest.headers.token = this.token;
+		this.$.incidentsRequest.generateRequest();
+	},
+	_selectedProjectChanged: function(){
+		//var project = this.incidentlist.incidents[this.selectedproject];
+		var id = this.selectedproject;
+		if (id){
+			this.$.incidentDataRequest.url = "http://localhost/swapp_server/api/Incident/" + id;
+			this.$.incidentDataRequest.params.jobTitleId =	this.jobtitleid;
+			this.$.incidentDataRequest.headers.token = this.token;
+			this.$.incidentDataRequest.generateRequest();
+
+			this.$.incidentTasksRequest.url = "http://localhost/swapp_server/api/Task/" + id;
+			this.$.incidentTasksRequest.params.jobTitleId =	this.jobtitleid;
+			this.$.incidentTasksRequest.headers.token = this.token;
+			this.$.incidentTasksRequest.generateRequest();
+		}
+	}
+});
+</script>

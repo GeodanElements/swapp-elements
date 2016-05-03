@@ -1,0 +1,29 @@
+{
+  "name": "swapp-elements",
+  "version": "0.0.1",
+  "homepage": "https://github.com/GeodanElements/swapp-elements",
+  "description": "Polymer implementation for swapp",
+  "keywords": [
+    "polymer",
+    "swapp"
+  ],
+  "main": [
+    "swapp-core.html"
+  ],
+  "authors": [
+    "Tom van Tilburg"
+  ],
+  "license": "MIT",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ],
+  "dependencies": {
+    "polymer": "Polymer/polymer#~1",
+    "paper-elements": "PolymerElements/paper-elements#~1",
+    "iron-elements": "PolymerElements/iron-elements#~1"
+  }
+}
